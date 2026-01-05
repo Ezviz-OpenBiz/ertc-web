@@ -1,0 +1,1 @@
+!function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e="undefined"!=typeof globalThis?globalThis:e||self).ERTC_WEB_PLUGINS_DEMO=n()}(this,function(){"use strict";return function e(){return e.EVENT={},{exec(e){console.log("demo plugin exec")}}}});

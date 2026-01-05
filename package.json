@@ -1,0 +1,71 @@
+{
+  "name": "ertc-web",
+  "version": "2.1.3-alpha.15",
+  "scripts": {
+    "build:dev": "rollup --config rollup.config.js",
+    "build:prod": "rollup --config rollup.config.js --environment NODE_ENV:prod"
+  },
+  "author": "ezviz",
+  "license": "ISC",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "type": "module",
+  "main": "dist/build/index.js",
+  "browser": "dist/build/index.js",
+  "module": "dist/build/index.esm.js",
+  "files": [
+    "dist",
+    "!dist/dev",
+    "!dist/site"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/build/index.esm.js",
+      "require": "./dist/build/index.js"
+    },
+    "./plugins": "./dist/build/plugins/index.esm.js",
+    "./plugins/*": "./dist/build/plugins/*.js"
+  },
+  "dependencies": {
+    "@ezuikit/utils-logger": "^1.0.1",
+    "dingrtc": "3.9.22",
+    "lodash-es": "^4.17.21",
+    "recorder-core": "^1.3.24040900",
+    "uuid": "^8.3.1",
+    "webrtc-adapter": "^8.2.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.17.5",
+    "@babel/helper-create-regexp-features-plugin": "^7.17.0",
+    "@babel/plugin-proposal-decorators": "^7.23.2",
+    "@babel/plugin-proposal-unicode-property-regex": "^7.16.7",
+    "@babel/plugin-transform-class-properties": "^7.24.1",
+    "@babel/plugin-transform-class-static-block": "^7.24.4",
+    "@babel/preset-env": "^7.16.11",
+    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-html": "^1.0.2",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "babel-preset-es2015": "^6.24.1",
+    "core-js": "^3.33.0",
+    "debounce-promise": "^3.1.2",
+    "docdash": "^2.0.1",
+    "eslint": "^5.1.0",
+    "eslint-loader": "^2.1.0",
+    "formdata-polyfill": "^4.0.10",
+    "glob": "^10.3.10",
+    "jsdoc": "^4.0.2",
+    "rollup": "^4.1.4",
+    "rollup-plugin-delete": "^2.0.0",
+    "rollup-plugin-dotenv": "^0.5.0",
+    "rollup-plugin-html2": "^4.0.0",
+    "rollup-plugin-json": "^4.0.0",
+    "rollup-plugin-livereload": "^2.0.5",
+    "rollup-plugin-serve": "^1.1.0",
+    "typescript": "^5.8.3"
+  },
+  "description": ""
+}

@@ -1,6 +1,6 @@
 /*!
-* ertc-web v2.1.3-alpha.18
-* (c) Thu Apr 02 2026 19:33:55 GMT+0800 (中国标准时间)
+* ertc-web v2.1.3-alpha.19
+* (c) Wed Apr 15 2026 19:21:12 GMT+0800 (中国标准时间)
 */
 import adapter from 'webrtc-adapter';
 import { cloneDeep, debounce, maxBy } from 'lodash-es';
@@ -11549,7 +11549,7 @@ function eventbus(target) {
   };
 }
 
-var version = "2.1.3-alpha.18";
+var version = "2.1.3-alpha.19";
 var packageJson = {
 	version: version};
 

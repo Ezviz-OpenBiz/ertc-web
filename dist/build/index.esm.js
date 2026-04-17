@@ -1,6 +1,6 @@
 /*!
-* ertc-web v2.1.3-alpha.19
-* (c) Wed Apr 15 2026 19:21:12 GMT+0800 (中国标准时间)
+* ertc-web v2.1.3-alpha.20
+* (c) Fri Apr 17 2026 17:43:29 GMT+0800 (中国标准时间)
 */
 import adapter from 'webrtc-adapter';
 import { cloneDeep, debounce, maxBy } from 'lodash-es';
@@ -11549,7 +11549,7 @@ function eventbus(target) {
   };
 }
 
-var version = "2.1.3-alpha.19";
+var version = "2.1.3-alpha.20";
 var packageJson = {
 	version: version};
 
@@ -18728,6 +18728,17 @@ class D_MRTC {
       return Promise.reject(error);
     }
     this._vcsIns.media.getStream(streamID).then(async stream => {
+      try {
+        var _this$_drtcIns$localT;
+        // 判断一下已经存在推流（兼容业务上有时候会出现publish already的报错，drtc不支持重复推流）
+        const _localVideoTrack = (_this$_drtcIns$localT = this._drtcIns.localTracks) === null || _this$_drtcIns$localT === void 0 ? void 0 : _this$_drtcIns$localT.find(item => item.source === 'camera');
+        if (_localVideoTrack) {
+          loggerMrtc.log('drtc已经存在视频推流，调用unpublish先取消推流');
+          await this._drtcIns.unpublish(_localVideoTrack);
+        }
+      } catch (error) {
+        loggerMrtc.error('判断drtc是否存在视频推流报错：', error);
+      }
       this._localVideoTrack = await DingRTC.createCustomVideoTrack({
         mediaStreamTrack: stream.getVideoTracks()[0]
       });

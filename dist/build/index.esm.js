@@ -1,6 +1,6 @@
 /*!
-* ertc-web v2.1.3-alpha.20
-* (c) Fri Apr 17 2026 17:43:29 GMT+0800 (中国标准时间)
+* ertc-web v2.1.3-alpha.21
+* (c) Fri May 15 2026 11:44:35 GMT+0800 (中国标准时间)
 */
 import adapter from 'webrtc-adapter';
 import { cloneDeep, debounce, maxBy } from 'lodash-es';
@@ -11549,7 +11549,7 @@ function eventbus(target) {
   };
 }
 
-var version = "2.1.3-alpha.20";
+var version = "2.1.3-alpha.21";
 var packageJson = {
 	version: version};
 
@@ -18351,8 +18351,10 @@ class D_MRTC {
             const drtcPerson = (_this$_drtcIns$remote = this._drtcIns.remoteUsers) === null || _this$_drtcIns$remote === void 0 ? void 0 : _this$_drtcIns$remote.find(item => item.userId === uid);
             loggerMrtc.log(`vcs person.vstate：${vcsPerson.vstate}`);
             loggerMrtc.log(`remoteUser.hasVideo：${drtcPerson.hasVideo} remoteUser.videoMuted：${drtcPerson.videoMuted}`);
-            loggerMrtc.log('mrtc触发vcs视频更新');
-            this._vcsIns.notice(this._globalParams.vcsTypes.NoticeType.throwRoomMemberInfo, vcsRoomInfo);
+
+            // 这里不去触发onNotifyRoomEvent，媒体状态完全依赖风远会控状态更新
+            // loggerMrtc.log('mrtc触发vcs视频更新')
+            // this._vcsIns.notice(this._globalParams.vcsTypes.NoticeType.throwRoomMemberInfo, vcsRoomInfo);
           }
         };
       }
@@ -19653,7 +19655,7 @@ class D_MRTC {
     // 更新媒体状态
     // 不更新自己，因为有滞后性，导致状态不及时
     if (vcsPerson.id !== this._vcsIns.getAccount().id) {
-      vcsPerson.vstate = !!(drtcPerson !== null && drtcPerson !== void 0 && drtcPerson.hasVideo) && !(drtcPerson !== null && drtcPerson !== void 0 && drtcPerson.videoMuted) ? 0 : 1;
+      // vcsPerson.vstate = (!!drtcPerson?.hasVideo && !drtcPerson?.videoMuted) ? 0 : 1
       // vcsPerson.astate = !!drtcPerson?.hasAudio ? 0 : 1
       // vcsPerson.astate = this._remoteUserMicMuted[drtcPerson.userId] === false ? 0 : 1 // 不在这处理了，直接以风远会控媒体音频状态为准
       vcsPerson.streams = this._replacePersonStreams(vcsPerson.streams);

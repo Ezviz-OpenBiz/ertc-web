@@ -1,6 +1,6 @@
 /*!
-* ertc-web v2.1.3-alpha.20
-* (c) Tue May 26 2026 23:26:24 GMT+0800 (中国标准时间)
+* ertc-web v2.1.3-alpha.23
+* (c) Tue Jun 16 2026 17:51:58 GMT+0800 (中国标准时间)
 */
 import adapter from 'webrtc-adapter';
 import { cloneDeep, debounce, maxBy } from 'lodash-es';
@@ -11549,7 +11549,7 @@ function eventbus(target) {
   };
 }
 
-var version = "2.1.3-alpha.20";
+var version = "2.1.3-alpha.23";
 var packageJson = {
 	version: version};
 
@@ -18732,9 +18732,6 @@ class D_MRTC {
     // 初始化监听事件
     this._initDrtcEvent();
 
-    // 提前监听 vcs 的入退会事件，避免业务层注册时机晚导致集合未初始化
-    this._initVcsEvent();
-
     // audioSFU：从sub audio 结果中 getMediaStreamTrack 无法在自定义的audio元素播放的问题，join 之前调用设置DingRTC.setClientConfig({audioSFU: false}) 
     // disableTransportCC：网络优化，切换成REMB模式
     DingRTC.setClientConfig({
@@ -18749,7 +18746,7 @@ class D_MRTC {
         const isUndefinedPros = !(prop in target);
         const isVcs = target._rtcType === 'vcs';
         const isSelfProperty = ['_drtcIns', '_vcsIns', '_globalParams', '_rtcType', '_transactions', '_vcsBeforeEnterRoomEventTransactions', '_mqttNetworkState'].includes(prop); // 是否是私有变量，主要是两个实例对象，避免 _rtcType 是 vcs的时候，从 _vcsIns里去找 mrtc的函数和变量
-        const isSelfFun = ['_listenVcsBeforeEnterRoomEvent'].includes(prop); // 是否是私有函数
+        const isSelfFun = ['_listenVcsBeforeEnterRoomEvent', '_initVcsEvent', '_handleVcsPeopleEnter', '_handleVcsPeopleExit'].includes(prop); // 是否是私有函数
         const isRebuild = ['enterRoom'].includes(prop); // 是否在业务层已改造传参的函数
         const isExtend = ['getRtcType'].includes(prop); // 是否是扩展函数，无论是vcs还是ertc都对外暴露，可以调用
         if (!isSelfProperty && !isSelfFun && !isRebuild && !isExtend && (isUndefinedPros || isVcs)) {
@@ -18830,12 +18827,13 @@ class D_MRTC {
    * */
   _initDrtcEvent() {
     var _this2 = this;
-    ['user-joined', 'user-left', 'user-published', 'user-unpublished', 'user-info-updated', "connection-state-change", 'sub-media-reconnect-started', "sub-media-reconnect-succeeded", 'sub-media-reconnect-failed', 'pub-media-reconnect-started', 'pub-media-reconnect-succeeded', 'pub-media-reconnect-failed', 'user-mic-audio-muted', "network-quality"].forEach(value => {
+    ['user-joined', 'user-left', 'user-published', 'user-unpublished', 'user-info-updated', "connection-state-change", 'sub-media-reconnect-started', "sub-media-reconnect-succeeded", 'sub-media-reconnect-failed', 'pub-media-reconnect-started', 'pub-media-reconnect-succeeded', 'pub-media-reconnect-failed', 'user-mic-audio-muted', "network-quality", "duplicated-pub-stream"].forEach(value => {
       let fn = null;
       // 用户入会，触发风远的通知，兼容人数一致的问题
       if (['user-joined'].includes(value)) {
         fn = user => {
           const sid = (user === null || user === void 0 ? void 0 : user.userId) != null ? String(user.userId) : null;
+          loggerMrtc.log(`drtc用户入会，userId：${sid}`);
           if (sid) {
             const state = this._getOrInitPersonJoinState(sid);
             state.drtc = true;
@@ -18848,6 +18846,7 @@ class D_MRTC {
       if (['user-left'].includes(value)) {
         fn = user => {
           const sid = (user === null || user === void 0 ? void 0 : user.userId) != null ? String(user.userId) : null;
+          loggerMrtc.log(`drtc用户退会，userId：${sid}`);
           if (sid) {
             const state = this._personJoinState[sid];
             if (state) {
@@ -19054,11 +19053,24 @@ class D_MRTC {
           }
         };
       }
+
+      /**
+         * 检测到本端发布的流出现重复（同一 participantId 下存在 2 个及以上同类型视频流）。
+         * 这通常是由于 publish 时网络异常导致客户端未收到服务端响应，触发重新发布后旧流残留。
+         * 业务层应监听此事件并执行退出重进（leave + join）操作来恢复正常。
+         * @paramstreamType 流的视频源类型（'camera' | 'screen-cast'）
+         */
+      if (["duplicated-pub-stream"].includes(value)) {
+        fn = streamType => {
+          loggerMrtc.log('检测到本端发布的流出现重复：', streamType);
+          this._vcsIns.notice(this._globalParams.vcsTypes.NoticeType.imposedExit, '推流异常，自动退出');
+        };
+      }
       fn && this._drtcIns.on(value, fn);
     });
   }
   /**
-   * @description 初始化 vcs 事件监听
+   * @description 初始化 vcs 事件监听，放在风远enterRoom之后，业务层会再meetclose的时候清除所有绑定事件。
    * 提前绑定 onPeopleEnter / onPeopleExit，确保 vcs 的入退会信号在业务层注册前就能进入 _personJoinState
    * */
   _initVcsEvent() {
@@ -19101,6 +19113,7 @@ class D_MRTC {
   enterRoom(params) {
     const deffered = deffer();
     this._listenVcsBeforeEnterRoomEvent();
+    this._initVcsEvent();
     // 风远加入房间（透传）
     const vcsPromise = this._vcsIns.enterRoom(params.vcsParams.roomOption, params.vcsParams.amixer, params.vcsParams.accountData, params.vcsParams.inviterUid, params.vcsParams.webinar_invitation_link_code);
     vcsPromise.then(res => {
@@ -19181,6 +19194,7 @@ class D_MRTC {
     // 风远刷新房间
     const vcsPromise = this._vcsIns.refreshRoom();
     const hasEnterRoom = this._vcsIns.enterRoomLoading || this._vcsIns.enterRoomData && this._vcsIns.enterRoomData.room;
+    this._initVcsEvent();
     vcsPromise.then(res => {
       // 如果有数据，说明不是刷新页面，而是首次进入房间，直接返回，避免drtc重复进入房间（放在promise请求之前就获取数据，是避免到这一步的时候，数据已经有了，导致判断出错）
       if (hasEnterRoom) {
@@ -19278,6 +19292,7 @@ class D_MRTC {
         mediaStreamTrack: stream.getVideoTracks()[0]
       });
       this._drtcIns.publish(this._localVideoTrack).then(res => {
+        loggerMrtc.log('drtc publish video 成功');
         // this._localVideoTrack.setMuted(false) // publish之后不用unmute，其他端在收到published之后会检测mute状态，进行补发
         const pcID = randomString(12);
         // 复用易会的更新状态逻辑 4. 更新状态信息
@@ -19320,26 +19335,27 @@ class D_MRTC {
     let index = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
     loggerMrtc.log('进入 stopPublishSelfVideo 函数');
     const deffered = deffer();
-    // 复用易会中的状态变更
-    if (this._vcsIns.controlsAccount) {
-      this._vcsIns.controlsAccount.video_state = 1;
-    }
     const pcID = (_this$_vcsIns$videoSt2 = this._vcsIns.videoStreams[index]) === null || _this$_vcsIns$videoSt2 === void 0 ? void 0 : _this$_vcsIns$videoSt2.connectID;
     if (!pcID) {
-      console.error(`停止推流视频${index}出错：没有相应的连接ID。stopPublishSelfVideo`);
+      loggerMrtc.error(`停止推流视频${index}出错：没有相应的连接ID。stopPublishSelfVideo`);
       // const error = vcsErr.throwErr(
       //   1002,
       //   `停止推流视频${index}出错：没有相应的连接ID。`,
       //   "stopPublishSelfVideo"
       // );
       // return reject(`停止推流视频${index}出错：没有相应的连接ID。`);
-      return Promise.resolve();
+      // return Promise.resolve();
     }
     this._localVideoTrack.setMuted(true);
     this._drtcIns.unpublish(this._localVideoTrack).then(res => {
       var _this$_localVideoTrac;
+      loggerMrtc.log('drtc unpublish video 成功');
       (_this$_localVideoTrac = this._localVideoTrack) === null || _this$_localVideoTrac === void 0 || _this$_localVideoTrac.close();
       this._localVideoTrack = null;
+      // 放到drtc调用成功后再更新vcs状态
+      if (this._vcsIns.controlsAccount) {
+        this._vcsIns.controlsAccount.video_state = 1;
+      }
       // 2. socket更新
       this._vcsIns._updateSocket_removeVideoTrack(index);
       // 3. 删除流连接信息
@@ -19427,7 +19443,7 @@ class D_MRTC {
     }
     const pcID = (_this$_vcsIns$audioSt2 = this._vcsIns.audioStreams[index]) === null || _this$_vcsIns$audioSt2 === void 0 ? void 0 : _this$_vcsIns$audioSt2.connectID;
     if (!pcID) {
-      console.error(`停止推流音频${index}出错：没有相应的连接ID。stopPublishSelfAudio`);
+      loggerMrtc.error(`停止推流音频${index}出错：没有相应的连接ID。stopPublishSelfAudio`);
       return Promise.resolve();
     }
     this._localAudioTrack.setMuted(true);
@@ -19502,8 +19518,9 @@ class D_MRTC {
       const pcID = (_this$_vcsIns$screenS2 = this._vcsIns.screenStreams[index]) === null || _this$_vcsIns$screenS2 === void 0 ? void 0 : _this$_vcsIns$screenS2.connectID;
       if (!pcID) {
         this._vcsIns.vcsErr.throwErr(1003, `停止推流桌面${index}出错：没有相应的连接ID。`, "stopPublishSelfScreen");
+        loggerMrtc.error(`停止推流桌面${index}出错：没有相应的连接ID。 stopPublishSelfScreen`);
         // return reject(error);
-        return resolve();
+        // return resolve();
       }
       const promise = this._localScreenVideoTrack ? this._drtcIns.unpublish(this._localScreenVideoTrack) : Promise.resolve(); // 兼容rejoin的场景，_localScreenVideoTrack为null的情况下，unpublish没有返回。
       promise.then(res => {
@@ -19569,6 +19586,7 @@ class D_MRTC {
     } else {
       // 常规逻辑
       this._drtcIns.subscribe('mcu', 'audio').then(remoteAudioTrack => {
+        loggerMrtc.log('订阅远端混音流成功');
         // remoteAudioTrack.play()
         // remoteAudioTrack.setVolume(0)
         this._remoteMixAudioTrack = remoteAudioTrack;
@@ -19578,6 +19596,7 @@ class D_MRTC {
           stream: this._remoteMixAudioStream
         });
       }).catch(err => {
+        loggerMrtc.log('订阅远端混音流失败', err);
         deffered.reject(err.message || err);
       });
     }
@@ -19676,6 +19695,7 @@ class D_MRTC {
         this._drtcIns.subscribe(stream_id, 'video').then(resolve).catch(reject);
       });
       Promise.all([vcsPromise, drtcPromise]).then(async res => {
+        loggerMrtc.log(`订阅视频成功，personId:${id}, stream_id: ${stream_id}`);
         const remoteVideoTrack = res[1];
         const connectID = `${id}_remote_video`;
         const stream = new MediaStream([remoteVideoTrack.getMediaStreamTrack()]);
@@ -19690,6 +19710,7 @@ class D_MRTC {
           stream
         });
       }).catch(err => {
+        loggerMrtc.log(`订阅视频失败，personId:${id}, stream_id: ${stream_id}`, err);
         deffered.reject(err.message || err);
       });
     }
@@ -20297,6 +20318,7 @@ class D_MRTC {
     if (this._rtcType !== 'drtc') return;
     const sid = (person === null || person === void 0 ? void 0 : person.stream_id) != null ? String(person.stream_id) : null;
     if (!sid) return;
+    loggerMrtc.log(`vcs用户入会，stream_id：${sid}`);
     const state = this._getOrInitPersonJoinState(sid);
     state.vcs = true;
     // 缓存独立副本，避免 vcsIns 内部持有引用后修改污染缓存
@@ -20310,6 +20332,7 @@ class D_MRTC {
     if (this._rtcType !== 'drtc') return;
     const sid = (person === null || person === void 0 ? void 0 : person.stream_id) != null ? String(person.stream_id) : null;
     if (!sid) return;
+    loggerMrtc.log(`vcs用户退会，stream_id：${sid}`);
     const state = this._personJoinState[sid];
     if (!state) return;
     state.vcs = false;
